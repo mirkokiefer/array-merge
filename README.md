@@ -22,5 +22,5 @@ var modified1 = [2, 6, 1, 3, 5, 4]
 var modified2 = [2, 3, 1, 4, 7, 5]
 var merged = merge.sets(origin, modified1, modified2)
 // returns:
-{conflict:true, result:[[2, 6, 1, 3, 7, 5, 4], [2, 6, 3, 1, 7, 5, 4]]}
+{conflict: true, result: [[2, 6, 1, 3, 7, 5, 4], [2, 6, 3, 1, 7, 5, 4]]}
 ```
