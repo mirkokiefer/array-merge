@@ -10,7 +10,9 @@
   "author": "Mirko Kiefer <mail@mirkokiefer.com>",
   "license": "BSD",
   "dependencies": {
-    "underscore": "~1.4.3",
+    "underscore": "~1.4.3"
+  },
+  "devDependencies": {
     "array-diff": "0.0.1"
   }
 }

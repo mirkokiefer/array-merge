@@ -1,6 +1,5 @@
 
 var _ = require('underscore')
-var diff = require('array-diff')({unique:true})
 var deepEqual = require('assert').deepEqual
 
 var modifierMap = function(diff) {
@@ -109,14 +108,4 @@ var merge = function(diff1, diff2) {
   }
 }
 
-var mergeSets = function(originSet, modifiedSet1, modifiedSet2) {
-  return merge(diff(originSet, modifiedSet1, true), diff(originSet, modifiedSet2, true))
-}
-
-var mergeObjects = function(origin, modified1, modified2) {
-
-}
-
-module.exports = {
-  sets: mergeSets
-}
+module.exports = merge
