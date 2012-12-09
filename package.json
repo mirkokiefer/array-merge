@@ -1,0 +1,16 @@
+{
+  "name": "array-merge",
+  "version": "0.0.1",
+  "description": "3-way merging of arrays",
+  "main": "index.js",
+  "scripts": {
+    "test": "mocha"
+  },
+  "repository": "",
+  "author": "Mirko Kiefer <mail@mirkokiefer.com>",
+  "license": "BSD",
+  "dependencies": {
+    "underscore": "~1.4.3",
+    "array-diff": "0.0.1"
+  }
+}
