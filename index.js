@@ -1,6 +1,7 @@
 
 var _ = require('underscore')
 var diff = require('array-diff')({unique:true})
+var deepEqual = require('assert').deepEqual
 
 var modifierMap = function(diff) {
   return _.object(diff.map(function(each) {
@@ -101,7 +102,11 @@ var merge = function(diff1, diff2) {
   while(pos1.pattern || pos2.pattern) {
     matchPattern(pos1.pattern+pos2.pattern, patterns)
   }
-  return [result1, result2]
+  if(_.isEqual(result1, result2)) {
+    return {result: result1}
+  } else {
+    return {conflict: true, result: [result1, result2]}
+  }
 }
 
 var mergeSets = function(originSet, modifiedSet1, modifiedSet2) {
