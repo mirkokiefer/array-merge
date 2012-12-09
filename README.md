@@ -1,5 +1,5 @@
 #array-merge
-3-way merging of arrays using [array-diff](https://github.com/mirkok/array-diff) as a diffing tool.
+3-way merging of arrays in javascript using [array-diff](https://github.com/mirkok/array-diff) as a diffing tool.
 
 You have to pass in an origin array and two modified versions of it.  
 
