@@ -1,7 +1,7 @@
 #array-merge
 3-way merging of arrays in javascript.
 
-You just have to pass in the diffs to the original array using [array-diff's](https://github.com/mirkok/array-diff) format.
+You just have to pass in the diffs to the original array using [array-diff's format](https://github.com/mirkok/array-diff).
 
 In the following example an optimal solution can be found as there are no edit conflicts:
 
