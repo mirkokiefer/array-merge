@@ -61,12 +61,15 @@ describe('merging sets', function() {
   })
   it('should do a n-way merge with conflicts', function() {
     var o = [1, 2, 3, 4, 5]
-    var m1 = [2, 6, 1, 3, 5, 4]
-    var m2 = [2, 3, 1, 4, 7, 5]
-    var m3 = [1, 2, 3, 4, 5]
-    var m4 = [1, 8, 2, 3, 4, 5]
+    var changes = [
+      [2, 6, 1, 3, 5, 4],
+      [2, 3, 1, 4, 7, 5],
+      [1, 2, 3, 4, 5],
+      [1, 8, 2, 3, 4, 5]
+    ]
     var expected = {"conflict":true,"result":[[8,2,6,1,3,7,5,4],[8,2,6,3,1,7,5,4],[1,8,2,6,3,7,5,4],[1,8,2,6,3,7,5,4]]}
-    var merged = mergeDiffs([diff(o, m1), diff(o, m2), diff(o, m3), diff(o, m4)])
+    var diffs = changes.map(function(each) { return diff(o, each) })
+    var merged = mergeDiffs(diffs)
     assert.deepEqual(merged, expected)
   })
 })
