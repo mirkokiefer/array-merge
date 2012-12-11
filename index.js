@@ -19,16 +19,25 @@ var pasteConflicts = function(parsers) {
   var pasteMap = {}
   var pos = 0;
   var applyRules = function() {
+    if (_.every(parsers, function(each) { return each.token.modifier == '=' })) {
+      parsers.forEach(function(each) { each.next() })
+      pos++
+    }
     parsers.filter(function(each) { return each.token.modifier == '+' })
       .forEach(function(each) { each.next() })
     parsers.filter(function(each) { return each.token.modifier == 'p' })
       .forEach(function(each) {
         var value = each.token.value
-        if (pasteMap[value] === undefined) return pasteMap[value] = {value: value, pos: pos}
-        if (pasteMap[value].pos !== pos) pasteMap[value].conflict = true
+        if (pasteMap[value] === undefined) {
+          pasteMap[value] = {value: value, pos: pos}
+        } else if (pasteMap[value].pos !== pos) {
+          pasteMap[value].conflict = true
+        }
+        each.next()
       })
-    parsers.forEach(function(each) { each.next() })
-    pos++
+    if(_.some(parsers, function(each) { return _.contains(['x', '-'], each.token.modifier) })) {
+      parsers.forEach(function(each) { each.next() })
+    }
   }
   while(_.some(parsers, function(parser) { return parser.token.modifier })) {
     applyRules()
