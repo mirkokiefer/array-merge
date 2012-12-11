@@ -2,12 +2,12 @@
 var _ = require('underscore')
 var deepEqual = require('assert').deepEqual
 
-function Parser(diff) {
+function Stream(diff) {
   this.diff = _.clone(diff)
   this.result = []
   this.next()
 }
-Parser.prototype.next = function() {
+Stream.prototype.next = function() {
   var entry = this.diff.shift() || [0]
   this.token = {
     modifier: entry[0],
@@ -15,17 +15,38 @@ Parser.prototype.next = function() {
   }
 }
 
-var pasteConflicts = function(parsers) {
+function StreamCol(streams) {
+  this.streams = streams
+}
+StreamCol.prototype.allResultsPush = function(value) {
+  this.streams.forEach(function(each) { each.result.push(value) })
+}
+StreamCol.prototype.next = function() {
+  this.streams.forEach(function(each) { each.next() })
+}
+StreamCol.prototype.filterByTokens = function(tokenTypes) {
+  var filtered = this.streams
+    .filter(function(each) { return _.contains(tokenTypes, each.token.modifier) })
+  return new StreamCol(filtered)
+}
+StreamCol.prototype.someHaveTokens = function(tokenTypes) {
+  return _.some(this.streams, function(each) { return _.contains(tokenTypes, each.token.modifier) })
+}
+StreamCol.prototype.allHaveToken = function(tokenType) {
+  return _.every(this.streams, function(each) { return each.token.modifier == tokenType })
+}
+
+var pasteConflicts = function(streams) {
   var pasteMap = {}
   var pos = 0;
   var parse = function() {
-    if (_.every(parsers, function(each) { return each.token.modifier == '=' })) {
-      parsers.forEach(function(each) { each.next() })
+    if (_.every(streams, function(each) { return each.token.modifier == '=' })) {
+      streams.forEach(function(each) { each.next() })
       return pos++
     }
-    parsers.filter(function(each) { return each.token.modifier == '+' })
+    streams.filter(function(each) { return each.token.modifier == '+' })
       .forEach(function(each) { each.next() })
-    parsers.filter(function(each) { return each.token.modifier == 'p' })
+    streams.filter(function(each) { return each.token.modifier == 'p' })
       .forEach(function(each) {
         var value = each.token.value
         if (pasteMap[value] === undefined) {
@@ -35,11 +56,11 @@ var pasteConflicts = function(parsers) {
         }
         each.next()
       })
-    if(_.some(parsers, function(each) { return _.contains(['x', '-'], each.token.modifier) })) {
-      parsers.forEach(function(each) { each.next() })
+    if(_.some(streams, function(each) { return _.contains(['x', '-'], each.token.modifier) })) {
+      streams.forEach(function(each) { each.next() })
     }
   }
-  while(_.some(parsers, function(parser) { return parser.token.modifier })) {
+  while(_.some(streams, function(parser) { return parser.token.modifier })) {
     parse()
   }
   var conflicts = []
@@ -50,7 +71,7 @@ var pasteConflicts = function(parsers) {
 }
 
 var markConflicts = function(diffs) {
-  var conflicts = pasteConflicts(diffs.map(function(each) { return new Parser(each) }))
+  var conflicts = pasteConflicts(diffs.map(function(each) { return new Stream(each) }))
   return diffs.map(function(diff) {
     return diff.map(function(entry) {
       if (_.contains(['x', 'p'], entry[0]) && _.contains(conflicts, entry[1])) {
@@ -62,66 +83,56 @@ var markConflicts = function(diffs) {
   })
 }
 
-var mergePatterns = function(parsers) {
-  var allParsersResultPush = function(value) {
-    parsers.forEach(function(each) { each.result.push(value) })
-  }
-  var filterModifiers = function(modifiers) {
-    return function(each) { return _.contains(modifiers, each.token.modifier) }
-  }
-  var someContainModifiers = function(modifiers) {
-    return _.some(parsers, function(each) { return _.contains(modifiers, each.token.modifier) })
-  }
+var mergePatterns = function(streamCol) {
   var sortByValue = function(a, b) { return a.token.value > b.token.value }
-  var next = function(parser) { parser.next() }
   return function() {
-    if (_.every(parsers, function(each) { return each.token.modifier == '=' })) {
-      allParsersResultPush(parsers[0].token.value)
-      return parsers.forEach(next)
+    if (streamCol.allHaveToken('=')) {
+      streamCol.allResultsPush(streamCol.streams[0].token.value)
+      return streamCol.next()
     }
 
-    parsers.filter(filterModifiers('+'))
+    streamCol.filterByTokens(['+']).streams
       .sort(sortByValue)
       .forEach(function(each) {
-        allParsersResultPush(each.token.value)
+        streamCol.allResultsPush(each.token.value)
         each.next()
       })
 
-    var pasting = parsers.filter(filterModifiers(['p', 'pc']))
-    _.chain(pasting).uniq(function(each) { return each.token.value })
+    var pasting = streamCol.filterByTokens(['p', 'pc'])
+    _.chain(pasting.streams).uniq(function(each) { return each.token.value })
       .sort(sortByValue)
       .each(function(eachPasting) {
         if(eachPasting.token.modifier == 'pc') {
           eachPasting.result.push(eachPasting.token.value)
         } else {
-          parsers.forEach(function(eachOther) { eachOther.result.push(eachPasting.token.value) })
+          streamCol.allResultsPush(eachPasting.token.value)
         }
       })
-    pasting.forEach(next)
+    pasting.next()
 
-    if(someContainModifiers(['xc'])) {
-      parsers.forEach(function(each) {
+    if(streamCol.someHaveTokens(['xc'])) {
+      streamCol.streams.forEach(function(each) {
         if (each.token.modifier == '=') each.result.push(each.token.value)
       })
     }
     
-    if(someContainModifiers(['x', 'xc', '-'])) {
-      parsers.forEach(next)
+    if(streamCol.someHaveTokens(['x', 'xc', '-'])) {
+      streamCol.next()
     }
   }
 }
 
 var merge = function(diffs) {
   var diffs = markConflicts(diffs)
-  var parsers = _.map(diffs, function(each) { return new Parser(each) })
-  var parse = mergePatterns(parsers)
-  while(_.some(parsers, function(parser) { return parser.token.modifier })) {
+  var streams = _.map(diffs, function(each) { return new Stream(each) })
+  var parse = mergePatterns(new StreamCol(streams))
+  while(_.some(streams, function(parser) { return parser.token.modifier })) {
     parse()
   }
-  if (_.every(parsers, function(each) { return _.isEqual(each.result, parsers[0].result) })) {
-    return {result: parsers[0].result}
+  if (_.every(streams, function(each) { return _.isEqual(each.result, streams[0].result) })) {
+    return {result: streams[0].result}
   } else {
-    return {conflict: true, result: parsers.map(function(each) { return each.result })}
+    return {conflict: true, result: streams.map(function(each) { return each.result })}
   }
 }
 
