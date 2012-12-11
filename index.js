@@ -18,10 +18,10 @@ Parser.prototype.next = function() {
 var pasteConflicts = function(parsers) {
   var pasteMap = {}
   var pos = 0;
-  var applyRules = function() {
+  var parse = function() {
     if (_.every(parsers, function(each) { return each.token.modifier == '=' })) {
       parsers.forEach(function(each) { each.next() })
-      pos++
+      return pos++
     }
     parsers.filter(function(each) { return each.token.modifier == '+' })
       .forEach(function(each) { each.next() })
@@ -40,7 +40,7 @@ var pasteConflicts = function(parsers) {
     }
   }
   while(_.some(parsers, function(parser) { return parser.token.modifier })) {
-    applyRules()
+    parse()
   }
   var conflicts = []
   _.each(pasteMap, function(each) {
@@ -77,7 +77,7 @@ var mergePatterns = function(parsers) {
   return function() {
     if (_.every(parsers, function(each) { return each.token.modifier == '=' })) {
       allParsersResultPush(parsers[0].token.value)
-      parsers.forEach(next)
+      return parsers.forEach(next)
     }
 
     parsers.filter(filterModifiers('+'))
@@ -114,9 +114,9 @@ var mergePatterns = function(parsers) {
 var merge = function(diffs) {
   var diffs = markConflicts(diffs)
   var parsers = _.map(diffs, function(each) { return new Parser(each) })
-  var applyPatterns = mergePatterns(parsers)
+  var parse = mergePatterns(parsers)
   while(_.some(parsers, function(parser) { return parser.token.modifier })) {
-    applyPatterns()
+    parse()
   }
   if (_.every(parsers, function(each) { return _.isEqual(each.result, parsers[0].result) })) {
     return {result: parsers[0].result}
