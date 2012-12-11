@@ -41,4 +41,4 @@ var changes = [
 var diffs = changes.map(function(each) { return diff(o, each) })
 var merged = mergeDiffs(diffs)
 // returns:
-{"conflict":true,"result":[[8,2,6,1,3,7,5,4],[8,2,6,3,1,7,5,4],[1,8,2,6,3,7,5,4],[1,8,2,6,3,7,5,4]]}
+{conflict: true, result: [[8,2,6,1,3,7,5,4],[8,2,6,3,1,7,5,4],[1,8,2,6,3,7,5,4],[1,8,2,6,3,7,5,4]]}
