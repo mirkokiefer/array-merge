@@ -10,7 +10,7 @@ function Stream(diff) {
 Stream.prototype.next = function() {
   var entry = this.diff.shift() || [0]
   this.token = {
-    modifier: entry[0],
+    type: entry[0],
     value: entry[1]
   }
 }
@@ -26,27 +26,27 @@ StreamCol.prototype.next = function() {
 }
 StreamCol.prototype.filterByTokens = function(tokenTypes) {
   var filtered = this.streams
-    .filter(function(each) { return _.contains(tokenTypes, each.token.modifier) })
+    .filter(function(each) { return _.contains(tokenTypes, each.token.type) })
   return new StreamCol(filtered)
 }
 StreamCol.prototype.someHaveTokens = function(tokenTypes) {
-  return _.some(this.streams, function(each) { return _.contains(tokenTypes, each.token.modifier) })
+  return _.some(this.streams, function(each) { return _.contains(tokenTypes, each.token.type) })
 }
 StreamCol.prototype.allHaveToken = function(tokenType) {
-  return _.every(this.streams, function(each) { return each.token.modifier == tokenType })
+  return _.every(this.streams, function(each) { return each.token.type == tokenType })
 }
 
-var pasteConflicts = function(streams) {
+var pasteConflicts = function(streamCol) {
   var pasteMap = {}
   var pos = 0;
   var parse = function() {
-    if (_.every(streams, function(each) { return each.token.modifier == '=' })) {
-      streams.forEach(function(each) { each.next() })
+    if (streamCol.allHaveToken('=')) {
+      streamCol.next()
       return pos++
     }
-    streams.filter(function(each) { return each.token.modifier == '+' })
-      .forEach(function(each) { each.next() })
-    streams.filter(function(each) { return each.token.modifier == 'p' })
+    streamCol.filterByTokens(['+']).next()
+
+    streamCol.filterByTokens(['p']).streams
       .forEach(function(each) {
         var value = each.token.value
         if (pasteMap[value] === undefined) {
@@ -56,11 +56,12 @@ var pasteConflicts = function(streams) {
         }
         each.next()
       })
-    if(_.some(streams, function(each) { return _.contains(['x', '-'], each.token.modifier) })) {
-      streams.forEach(function(each) { each.next() })
+    
+    if(streamCol.someHaveTokens(['x', '-'])) {
+      streamCol.next()
     }
   }
-  while(_.some(streams, function(parser) { return parser.token.modifier })) {
+  while(_.some(streamCol.streams, function(parser) { return parser.token.type })) {
     parse()
   }
   var conflicts = []
@@ -71,7 +72,8 @@ var pasteConflicts = function(streams) {
 }
 
 var markConflicts = function(diffs) {
-  var conflicts = pasteConflicts(diffs.map(function(each) { return new Stream(each) }))
+  var streams = diffs.map(function(each) { return new Stream(each) })
+  var conflicts = pasteConflicts(new StreamCol(streams))
   return diffs.map(function(diff) {
     return diff.map(function(entry) {
       if (_.contains(['x', 'p'], entry[0]) && _.contains(conflicts, entry[1])) {
@@ -102,7 +104,7 @@ var mergePatterns = function(streamCol) {
     _.chain(pasting.streams).uniq(function(each) { return each.token.value })
       .sort(sortByValue)
       .each(function(eachPasting) {
-        if(eachPasting.token.modifier == 'pc') {
+        if(eachPasting.token.type == 'pc') {
           eachPasting.result.push(eachPasting.token.value)
         } else {
           streamCol.allResultsPush(eachPasting.token.value)
@@ -112,7 +114,7 @@ var mergePatterns = function(streamCol) {
 
     if(streamCol.someHaveTokens(['xc'])) {
       streamCol.streams.forEach(function(each) {
-        if (each.token.modifier == '=') each.result.push(each.token.value)
+        if (each.token.type == '=') each.result.push(each.token.value)
       })
     }
     
@@ -126,7 +128,7 @@ var merge = function(diffs) {
   var diffs = markConflicts(diffs)
   var streams = _.map(diffs, function(each) { return new Stream(each) })
   var parse = mergePatterns(new StreamCol(streams))
-  while(_.some(streams, function(parser) { return parser.token.modifier })) {
+  while(_.some(streams, function(parser) { return parser.token.type })) {
     parse()
   }
   if (_.every(streams, function(each) { return _.isEqual(each.result, streams[0].result) })) {
