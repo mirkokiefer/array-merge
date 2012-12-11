@@ -3,7 +3,7 @@ var assert = require('assert')
 var mergeDiffs = require('./index')
 var diff = require('array-diff')({unique:true})
 var merge = function(origin, modified1, modified2) {
-    return mergeDiffs(diff(origin, modified1), diff(origin, modified2))
+    return mergeDiffs([diff(origin, modified1), diff(origin, modified2)])
 }
 
 describe('merging sets', function() {
@@ -57,6 +57,16 @@ describe('merging sets', function() {
     var modified2 = [2, 3, 1, 4, 5]
     var expected = {result: [2, 1, 5, 4]}
     var merged = merge(origin, modified1, modified2)
+    assert.deepEqual(merged, expected)
+  })
+  it('should do a n-way merge with conflicts', function() {
+    var o = [1, 2, 3, 4, 5]
+    var m1 = [2, 6, 1, 3, 5, 4]
+    var m2 = [2, 3, 1, 4, 7, 5]
+    var m3 = [1, 2, 3, 4, 5]
+    var m4 = [1, 8, 2, 3, 4, 5]
+    var expected = {"conflict":true,"result":[[8,2,6,1,3,7,5,4],[8,2,6,3,1,7,5,4],[1,8,2,6,3,7,5,4],[1,8,2,6,3,7,5,4]]}
+    var merged = mergeDiffs([diff(o, m1), diff(o, m2), diff(o, m3), diff(o, m4)])
     assert.deepEqual(merged, expected)
   })
 })

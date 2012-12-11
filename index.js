@@ -2,16 +2,9 @@
 var _ = require('underscore')
 var deepEqual = require('assert').deepEqual
 
-var modifierMap = function(diff) {
-  return _.object(diff.map(function(each) {
-    return [each[1], each[0]]
-  }))
-}
-
 function Parser(diff) {
-  this.diff = diff
+  this.diff = _.clone(diff)
   this.result = []
-  this.modifierMap = modifierMap(diff)
   this.next()
 }
 Parser.prototype.next = function() {
@@ -20,6 +13,44 @@ Parser.prototype.next = function() {
     modifier: entry[0],
     value: entry[1]
   }
+}
+
+var pasteConflicts = function(parsers) {
+  var pasteMap = {}
+  var pos = 0;
+  var applyRules = function() {
+    parsers.filter(function(each) { return each.token.modifier == '+' })
+      .forEach(function(each) { each.next() })
+    parsers.filter(function(each) { return each.token.modifier == 'p' })
+      .forEach(function(each) {
+        var value = each.token.value
+        if (pasteMap[value] === undefined) return pasteMap[value] = {value: value, pos: pos}
+        if (pasteMap[value].pos !== pos) pasteMap[value].conflict = true
+      })
+    parsers.forEach(function(each) { each.next() })
+    pos++
+  }
+  while(_.some(parsers, function(parser) { return parser.token.modifier })) {
+    applyRules()
+  }
+  var conflicts = []
+  _.each(pasteMap, function(each) {
+    if (each.conflict) conflicts.push(each.value)
+  })
+  return conflicts
+}
+
+var markConflicts = function(diffs) {
+  var conflicts = pasteConflicts(diffs.map(function(each) { return new Parser(each) }))
+  return diffs.map(function(diff) {
+    return diff.map(function(entry) {
+      if (_.contains(['x', 'p'], entry[0]) && _.contains(conflicts, entry[1])) {
+        return [entry[0]+'c', entry[1]]
+      } else {
+        return entry
+      }
+    })
+  })
 }
 
 var mergePatterns = function(parsers) {
@@ -33,31 +64,39 @@ var mergePatterns = function(parsers) {
     }
 
     parsers.filter(function(each) { return each.token.modifier == '+' })
-      .sort(function(a, b) { return a.token.modifier > b.token.modifier })
+      .sort(function(a, b) { return a.token.value > b.token.value })
       .forEach(function(each) {
         allParsersResultPush(each.token.value)
         each.next()
       })
 
-    parsers.filter(function(each) { return each.token.modifier == 'p' })
-      .sort(function(a, b) { return a.token.modifier > b.token.modifier })
-      .forEach(function(eachPasting) {
-        parsers.forEach(function(eachOther) {
-          if((eachOther.modifierMap[eachPasting.token.value] == '=') || (eachOther == eachPasting)) {
-            eachOther.result.push(eachPasting.token.value)
-          }
-        })
-        eachPasting.next()
+    var pasting = parsers.filter(function(each) { return _.contains(['p', 'pc'], each.token.modifier) })
+    _.chain(pasting).uniq(function(each) { return each.token.value })
+      .sort(function(a, b) { return a.token.value > b.token.value })
+      .each(function(eachPasting) {
+        if(eachPasting.token.modifier == 'pc') {
+          eachPasting.result.push(eachPasting.token.value)
+        } else {
+          parsers.forEach(function(eachOther) { eachOther.result.push(eachPasting.token.value) })
+        }
       })
+    pasting.forEach(function(each) { each.next() })
 
-    if(_.some(parsers, function(each) { return _.contains(['x', '-'], each.token.modifier) })) {
+    if(_.some(parsers, function(each) { return each.token.modifier == 'xc' })) {
+      parsers.forEach(function(each) {
+        if (each.token.modifier == '=') each.result.push(each.token.value)
+      })
+    }
+    
+    if(_.some(parsers, function(each) { return _.contains(['x', 'xc', '-'], each.token.modifier) })) {
       parsers.forEach(function(each) { each.next() })
     }
   }
 }
 
-var merge = function() {
-  var parsers = _.map(arguments, function(each) { return new Parser(each) })
+var merge = function(diffs) {
+  var diffs = markConflicts(diffs)
+  var parsers = _.map(diffs, function(each) { return new Parser(each) })
   var applyPatterns = mergePatterns(parsers)
   while(_.some(parsers, function(parser) { return parser.token.modifier })) {
     applyPatterns()
