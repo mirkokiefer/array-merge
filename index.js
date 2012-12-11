@@ -15,24 +15,24 @@ Stream.prototype.next = function() {
   }
 }
 
-function StreamCol(streams) {
+function StreamCollection(streams) {
   this.streams = streams
 }
-StreamCol.prototype.allResultsPush = function(value) {
+StreamCollection.prototype.allResultsPush = function(value) {
   this.streams.forEach(function(each) { each.result.push(value) })
 }
-StreamCol.prototype.next = function() {
+StreamCollection.prototype.next = function() {
   this.streams.forEach(function(each) { each.next() })
 }
-StreamCol.prototype.filterByTokens = function(tokenTypes) {
+StreamCollection.prototype.filterByTokens = function(tokenTypes) {
   var filtered = this.streams
     .filter(function(each) { return _.contains(tokenTypes, each.token.type) })
-  return new StreamCol(filtered)
+  return new StreamCollection(filtered)
 }
-StreamCol.prototype.someHaveTokens = function(tokenTypes) {
+StreamCollection.prototype.someHaveTokens = function(tokenTypes) {
   return _.some(this.streams, function(each) { return _.contains(tokenTypes, each.token.type) })
 }
-StreamCol.prototype.allHaveToken = function(tokenType) {
+StreamCollection.prototype.allHaveToken = function(tokenType) {
   return _.every(this.streams, function(each) { return each.token.type == tokenType })
 }
 
@@ -56,11 +56,12 @@ var pasteConflicts = function(streamCol) {
         }
         each.next()
       })
-    
+
     if(streamCol.someHaveTokens(['x', '-'])) {
       streamCol.next()
     }
   }
+  
   while(_.some(streamCol.streams, function(parser) { return parser.token.type })) {
     parse()
   }
@@ -73,7 +74,7 @@ var pasteConflicts = function(streamCol) {
 
 var markConflicts = function(diffs) {
   var streams = diffs.map(function(each) { return new Stream(each) })
-  var conflicts = pasteConflicts(new StreamCol(streams))
+  var conflicts = pasteConflicts(new StreamCollection(streams))
   return diffs.map(function(diff) {
     return diff.map(function(entry) {
       if (_.contains(['x', 'p'], entry[0]) && _.contains(conflicts, entry[1])) {
@@ -101,7 +102,8 @@ var mergePatterns = function(streamCol) {
       })
 
     var pasting = streamCol.filterByTokens(['p', 'pc'])
-    _.chain(pasting.streams).uniq(function(each) { return each.token.value })
+    _.chain(pasting.streams)
+      .uniq(function(each) { return each.token.value })
       .sort(sortByValue)
       .each(function(eachPasting) {
         if(eachPasting.token.type == 'pc') {
@@ -127,7 +129,7 @@ var mergePatterns = function(streamCol) {
 var merge = function(diffs) {
   var diffs = markConflicts(diffs)
   var streams = _.map(diffs, function(each) { return new Stream(each) })
-  var parse = mergePatterns(new StreamCol(streams))
+  var parse = mergePatterns(new StreamCollection(streams))
   while(_.some(streams, function(parser) { return parser.token.type })) {
     parse()
   }
