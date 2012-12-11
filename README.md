@@ -17,7 +17,7 @@ var merged = merge.sets([diff(origin, modified1), diff(origin, modified2)])
 {result: [1, 6, 2, 3, 7, 5, 4]}
 ```
 
-In this scenario we have order conflicts and the function returns two different solutions:
+In this scenario we have order conflicts and we get the closest possible solution for each modified array:
 
 ``` js
 var origin = [1, 2, 3, 4, 5]
