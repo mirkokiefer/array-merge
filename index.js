@@ -57,22 +57,30 @@ var mergePatterns = function(parsers) {
   var allParsersResultPush = function(value) {
     parsers.forEach(function(each) { each.result.push(value) })
   }
+  var filterModifiers = function(modifiers) {
+    return function(each) { return _.contains(modifiers, each.token.modifier) }
+  }
+  var someContainModifiers = function(modifiers) {
+    return _.some(parsers, function(each) { return _.contains(modifiers, each.token.modifier) })
+  }
+  var sortByValue = function(a, b) { return a.token.value > b.token.value }
+  var next = function(parser) { parser.next() }
   return function() {
     if (_.every(parsers, function(each) { return each.token.modifier == '=' })) {
       allParsersResultPush(parsers[0].token.value)
-      parsers.forEach(function(each) { each.next() })
+      parsers.forEach(next)
     }
 
-    parsers.filter(function(each) { return each.token.modifier == '+' })
-      .sort(function(a, b) { return a.token.value > b.token.value })
+    parsers.filter(filterModifiers('+'))
+      .sort(sortByValue)
       .forEach(function(each) {
         allParsersResultPush(each.token.value)
         each.next()
       })
 
-    var pasting = parsers.filter(function(each) { return _.contains(['p', 'pc'], each.token.modifier) })
+    var pasting = parsers.filter(filterModifiers(['p', 'pc']))
     _.chain(pasting).uniq(function(each) { return each.token.value })
-      .sort(function(a, b) { return a.token.value > b.token.value })
+      .sort(sortByValue)
       .each(function(eachPasting) {
         if(eachPasting.token.modifier == 'pc') {
           eachPasting.result.push(eachPasting.token.value)
@@ -80,16 +88,16 @@ var mergePatterns = function(parsers) {
           parsers.forEach(function(eachOther) { eachOther.result.push(eachPasting.token.value) })
         }
       })
-    pasting.forEach(function(each) { each.next() })
+    pasting.forEach(next)
 
-    if(_.some(parsers, function(each) { return each.token.modifier == 'xc' })) {
+    if(someContainModifiers(['xc'])) {
       parsers.forEach(function(each) {
         if (each.token.modifier == '=') each.result.push(each.token.value)
       })
     }
     
-    if(_.some(parsers, function(each) { return _.contains(['x', 'xc', '-'], each.token.modifier) })) {
-      parsers.forEach(function(each) { each.next() })
+    if(someContainModifiers(['x', 'xc', '-'])) {
+      parsers.forEach(next)
     }
   }
 }
