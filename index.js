@@ -2,17 +2,13 @@
 var _ = require('underscore')
 var deepEqual = require('assert').deepEqual
 
-function Stream(diff) {
-  this.diff = _.clone(diff)
+function Stream(tokens) {
+  this.tokens = _.clone(tokens)
   this.result = []
   this.next()
 }
 Stream.prototype.next = function() {
-  var entry = this.diff.shift() || [0]
-  this.token = {
-    type: entry[0],
-    value: entry[1]
-  }
+  this.token = this.tokens.shift() || {type: 0}
 }
 
 function StreamCollection(streams) {
@@ -90,8 +86,8 @@ var markConflicts = function(diffs) {
   var conflicts = parsePasteConflicts(streamCol)
   return diffs.map(function(diff) {
     return diff.map(function(entry) {
-      if (_.contains(['x', 'p'], entry[0]) && _.contains(conflicts, entry[1])) {
-        return [entry[0]+'c', entry[1]]
+      if (_.contains(['x', 'p'], entry.type) && _.contains(conflicts, entry.value)) {
+        return {type: entry.type+'c', value: entry.value}
       } else {
         return entry
       }
@@ -143,7 +139,10 @@ var parseDiffs = function(streamCol) {
 }
 
 var merge = function(diffs) {
-  var diffs = markConflicts(diffs)
+  var tokenizedDiffs = diffs.map(function(diff) {
+    return diff.map(function(each) { return {type: each[0], value: each[1]}})
+  })
+  var diffs = markConflicts(tokenizedDiffs)
   var streams = _.map(diffs, function(each) { return new Stream(each) })
   parseDiffs(new StreamCollection(streams))
   if (_.every(streams, function(each) { return _.isEqual(each.result, streams[0].result) })) {
