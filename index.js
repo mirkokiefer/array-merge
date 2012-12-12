@@ -17,12 +17,29 @@ Stream.prototype.next = function() {
 
 function StreamCollection(streams) {
   this.streams = streams
+  this.listenersSome = []
+  this.listenersAll = []
 }
 StreamCollection.prototype.allResultsPush = function(value) {
   this.streams.forEach(function(each) { each.result.push(value) })
 }
 StreamCollection.prototype.next = function() {
   this.streams.forEach(function(each) { each.next() })
+}
+StreamCollection.prototype.emit = function() {
+  var obj = this
+  var listenerAll = _.find(this.listenersAll, function(listener) {
+    return _.every(obj.streams, function(each) { return each.token.type === listener.tokenType })
+  })
+  if(listenerAll) {
+    listenerAll.handler(this)
+  } else {
+    this.listenersSome.forEach(function(listener) {
+      var filtered = obj.filterByTokens(listener.tokenTypes)
+      if(filtered.streams.length) listener.handler(filtered)
+    })
+  }
+  if(_.some(this.streams, function(each) { return each.token.type !== 0 })) this.emit()
 }
 StreamCollection.prototype.filterByTokens = function(tokenTypes) {
   var filtered = this.streams
@@ -34,6 +51,12 @@ StreamCollection.prototype.someHaveTokens = function(tokenTypes) {
 }
 StreamCollection.prototype.allHaveToken = function(tokenType) {
   return _.every(this.streams, function(each) { return each.token.type == tokenType })
+}
+StreamCollection.prototype.onSome = function(tokenTypes, handler) {
+  this.listenersSome.push({tokenTypes: tokenTypes, handler: handler})
+}
+StreamCollection.prototype.onAll = function(tokenType, handler) {
+  this.listenersAll.push({tokenType: tokenType, handler: handler})
 }
 
 var pasteConflicts = function(streamCol) {
@@ -61,7 +84,7 @@ var pasteConflicts = function(streamCol) {
       streamCol.next()
     }
   }
-  
+
   while(_.some(streamCol.streams, function(parser) { return parser.token.type })) {
     parse()
   }
@@ -74,7 +97,8 @@ var pasteConflicts = function(streamCol) {
 
 var markConflicts = function(diffs) {
   var streams = diffs.map(function(each) { return new Stream(each) })
-  var conflicts = pasteConflicts(new StreamCollection(streams))
+  var streamCol = new StreamCollection(streams)
+  var conflicts = pasteConflicts(streamCol)
   return diffs.map(function(diff) {
     return diff.map(function(entry) {
       if (_.contains(['x', 'p'], entry[0]) && _.contains(conflicts, entry[1])) {
@@ -86,22 +110,23 @@ var markConflicts = function(diffs) {
   })
 }
 
-var mergePatterns = function(streamCol) {
+var parseDiffs = function(streamCol) {
   var sortByValue = function(a, b) { return a.token.value > b.token.value }
-  return function() {
-    if (streamCol.allHaveToken('=')) {
-      streamCol.allResultsPush(streamCol.streams[0].token.value)
-      return streamCol.next()
-    }
+  streamCol.onAll('=', function() {
+    streamCol.allResultsPush(streamCol.streams[0].token.value)
+    streamCol.next()
+  })
 
-    streamCol.filterByTokens(['+']).streams
+  streamCol.onSome(['+'], function(adding) {
+    adding.streams
       .sort(sortByValue)
       .forEach(function(each) {
         streamCol.allResultsPush(each.token.value)
         each.next()
       })
+  }  )    
 
-    var pasting = streamCol.filterByTokens(['p', 'pc'])
+  streamCol.onSome(['p', 'pc'], function(pasting) {
     _.chain(pasting.streams)
       .uniq(function(each) { return each.token.value })
       .sort(sortByValue)
@@ -113,26 +138,25 @@ var mergePatterns = function(streamCol) {
         }
       })
     pasting.next()
+  })
 
-    if(streamCol.someHaveTokens(['xc'])) {
-      streamCol.streams.forEach(function(each) {
-        if (each.token.type == '=') each.result.push(each.token.value)
-      })
-    }
-    
-    if(streamCol.someHaveTokens(['x', 'xc', '-'])) {
-      streamCol.next()
-    }
-  }
+  streamCol.onSome(['xc'], function() {
+    streamCol.streams.forEach(function(each) {
+      if (each.token.type == '=') each.result.push(each.token.value)
+    })
+  })
+  
+  streamCol.onSome(['x', 'xc', '-'], function() {
+    streamCol.next()
+  })
+
+  streamCol.emit()
 }
 
 var merge = function(diffs) {
   var diffs = markConflicts(diffs)
   var streams = _.map(diffs, function(each) { return new Stream(each) })
-  var parse = mergePatterns(new StreamCollection(streams))
-  while(_.some(streams, function(parser) { return parser.token.type })) {
-    parse()
-  }
+  parseDiffs(new StreamCollection(streams))
   if (_.every(streams, function(each) { return _.isEqual(each.result, streams[0].result) })) {
     return {result: streams[0].result}
   } else {
