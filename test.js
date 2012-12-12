@@ -72,4 +72,19 @@ describe('merging sets', function() {
     var merged = mergeDiffs(diffs)
     assert.deepEqual(merged, expected)
   })
+  it('should test these previously wrong merged diffs', function() {
+    var diffs = [
+      [["x",1],["x",2],["+",5],["=",3],["p",2],["=",4],["p",1]],
+      [["x",1],["=",2],["-",3],["p",1],["=",4]]
+    ]
+    var expected = {
+      conflict: true,
+      result: [
+        [5, 2, 4, 1],
+        [5, 1, 2, 4]
+      ]
+    }
+    var merged = mergeDiffs(diffs)
+    assert.deepEqual(merged, expected)
+  })
 })
