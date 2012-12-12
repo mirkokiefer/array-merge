@@ -35,22 +35,12 @@ StreamCollection.prototype.emit = function() {
     listenerAll.handler(this)
   } else {
     this.listenersSome.forEach(function(listener) {
-      var filtered = obj.filterByTokens(listener.tokenTypes)
-      if(filtered.streams.length) listener.handler(filtered)
+      var filtered = obj.streams
+        .filter(function(each) { return _.contains(listener.tokenTypes, each.token.type) })
+      if(filtered.length) listener.handler(new StreamCollection(filtered))
     })
   }
   if(_.some(this.streams, function(each) { return each.token.type !== 0 })) this.emit()
-}
-StreamCollection.prototype.filterByTokens = function(tokenTypes) {
-  var filtered = this.streams
-    .filter(function(each) { return _.contains(tokenTypes, each.token.type) })
-  return new StreamCollection(filtered)
-}
-StreamCollection.prototype.someHaveTokens = function(tokenTypes) {
-  return _.some(this.streams, function(each) { return _.contains(tokenTypes, each.token.type) })
-}
-StreamCollection.prototype.allHaveToken = function(tokenType) {
-  return _.every(this.streams, function(each) { return each.token.type == tokenType })
 }
 StreamCollection.prototype.onSome = function(tokenTypes, handler) {
   this.listenersSome.push({tokenTypes: tokenTypes, handler: handler})
@@ -59,17 +49,19 @@ StreamCollection.prototype.onAll = function(tokenType, handler) {
   this.listenersAll.push({tokenType: tokenType, handler: handler})
 }
 
-var pasteConflicts = function(streamCol) {
+var parsePasteConflicts = function(streamCol) {
   var pasteMap = {}
   var pos = 0;
-  var parse = function() {
-    if (streamCol.allHaveToken('=')) {
-      streamCol.next()
-      return pos++
-    }
-    streamCol.filterByTokens(['+']).next()
 
-    streamCol.filterByTokens(['p']).streams
+  streamCol.onAll('=', function() {
+    streamCol.next()
+    return pos++
+  })
+
+  streamCol.onSome(['+'], function(addingStreamCol) { addingStreamCol.next() })
+
+  streamCol.onSome(['p'], function(pastingStreamCol) {
+    pastingStreamCol.streams
       .forEach(function(each) {
         var value = each.token.value
         if (pasteMap[value] === undefined) {
@@ -79,15 +71,12 @@ var pasteConflicts = function(streamCol) {
         }
         each.next()
       })
+  })
 
-    if(streamCol.someHaveTokens(['x', '-'])) {
-      streamCol.next()
-    }
-  }
+  streamCol.onSome(['x', '-'], function() { streamCol.next() })
+  
+  streamCol.emit()
 
-  while(_.some(streamCol.streams, function(parser) { return parser.token.type })) {
-    parse()
-  }
   var conflicts = []
   _.each(pasteMap, function(each) {
     if (each.conflict) conflicts.push(each.value)
@@ -98,7 +87,7 @@ var pasteConflicts = function(streamCol) {
 var markConflicts = function(diffs) {
   var streams = diffs.map(function(each) { return new Stream(each) })
   var streamCol = new StreamCollection(streams)
-  var conflicts = pasteConflicts(streamCol)
+  var conflicts = parsePasteConflicts(streamCol)
   return diffs.map(function(diff) {
     return diff.map(function(entry) {
       if (_.contains(['x', 'p'], entry[0]) && _.contains(conflicts, entry[1])) {
